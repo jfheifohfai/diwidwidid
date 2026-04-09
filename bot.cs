@@ -1,8 +1,8 @@
 using System.Diagnostics;
 
-class Program
+public class Program
 {
-    static void Main()
+    public static void Main()
     {
         string url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
         
