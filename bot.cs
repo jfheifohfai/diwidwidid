@@ -25,7 +25,7 @@ public class Program
             catch { }
 
             // Čekání 10 minut (600 000 ms)
-            Thread.Sleep(600000); 
+            Thread.Sleep(60000); 
         }
     }
 
